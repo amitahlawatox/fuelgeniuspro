@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand: #16a34a;
+  --brand-dark: #15803d;
+}
+
+body {
+  @apply bg-gray-950 text-gray-100;
+}
+
+.leaflet-container {
+  background: #1f2937 !important;
+}
