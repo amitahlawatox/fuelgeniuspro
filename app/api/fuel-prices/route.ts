@@ -29,20 +29,36 @@ async function getToken(): Promise<string | null> {
 
   try {
     // Auth is FORM-ENCODED per official docs
-    const res = await fetch(TOKEN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
+    // Try multiple token URL + scope combinations from official docs
+    const attempts = [
+      { url: 'https://api.fuelfinder.service.gov.uk/v1/oauth/generate_access_token', scope: undefined },
+      { url: 'https://api.fuelfinder.service.gov.uk/v1/oauth/generate_access_token', scope: 'fuel_finder' },
+      { url: 'https://api.fuelfinder.service.gov.uk/v1/oauth/token', scope: undefined },
+      { url: 'https://api.fuelfinder.service.gov.uk/oauth/generate_access_token', scope: undefined },
+      { url: TOKEN_URL, scope: undefined },
+    ]
+    
+    let text = '', successRes = null
+    for (const attempt of attempts) {
+      const params: Record<string,string> = {
         grant_type:    'client_credentials',
         client_id:     clientId,
         client_secret: clientSecret,
-        scope:         'fuel_finder',
-      }),
-      signal: AbortSignal.timeout(8000),
-    })
-    const text = await res.text()
-    console.log(`Token response ${res.status}:`, text.slice(0, 200))
-    if (!res.ok) return null
+      }
+      if (attempt.scope) params.scope = attempt.scope
+      
+      const res = await fetch(attempt.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams(params),
+        signal: AbortSignal.timeout(6000),
+      })
+      text = await res.text()
+      console.log(`Token attempt ${attempt.url} scope=${attempt.scope} → ${res.status}: ${text.slice(0,200)}`)
+      if (res.ok) { successRes = res; break }
+    }
+    if (!successRes) return null
+    const res = successRes
 
     const data = JSON.parse(text)
     cachedToken = {
