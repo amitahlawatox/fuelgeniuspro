@@ -28,35 +28,39 @@ async function getToken(): Promise<string | null> {
     return cachedToken.access_token
   }
 
-  // Use refresh token if available
-  const useRefresh = !!cachedToken?.refresh_token
-  const url  = useRefresh
-    ? `${API_BASE}/api/v1/oauth/regenerate_access_token`
-    : `${API_BASE}/api/v1/oauth/generate_access_token`
-  // KEY: NO grant_type field — just client_id + client_secret
-  const body = useRefresh
-    ? { client_id: clientId, refresh_token: cachedToken!.refresh_token }
-    : { client_id: clientId, client_secret: clientSecret }
+  // Try multiple auth formats — gov portal docs show form-encoded, working apps show JSON
+  const attempts = [
+    // Format 1: JSON no grant_type (Node-RED working code)
+    { ct: 'application/json', body: JSON.stringify({ client_id: clientId, client_secret: clientSecret }) },
+    // Format 2: JSON with grant_type (dev.to article)
+    { ct: 'application/json', body: JSON.stringify({ grant_type: 'client_credentials', client_id: clientId, client_secret: clientSecret }) },
+    // Format 3: Form-encoded with grant_type (official PDF docs)
+    { ct: 'application/x-www-form-urlencoded', body: new URLSearchParams({ grant_type: 'client_credentials', client_id: clientId, client_secret: clientSecret }).toString() },
+    // Format 4: Form-encoded with scope
+    { ct: 'application/x-www-form-urlencoded', body: new URLSearchParams({ grant_type: 'client_credentials', client_id: clientId, client_secret: clientSecret, scope: 'fuel_finder' }).toString() },
+  ]
 
   try {
-    const res = await fetch(url, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body:    JSON.stringify(body),
-      signal:  AbortSignal.timeout(10000),
-    })
-    const text = await res.text()
-    console.log(`Token ${res.status}:`, text.slice(0, 200))
-    if (!res.ok) return null
+    for (const attempt of attempts) {
+      const res = await fetch(`${API_BASE}/api/v1/oauth/generate_access_token`, {
+        method:  'POST',
+        headers: { 'Content-Type': attempt.ct, Accept: 'application/json' },
+        body:    attempt.body,
+        signal:  AbortSignal.timeout(10000),
+      })
+      const text = await res.text()
+      console.log(`Token ${res.status} [${attempt.ct.includes('json')?'JSON':'FORM'}]:`, text.slice(0, 300))
+      if (!res.ok) continue
 
-    const data = JSON.parse(text)
-    const expiresIn = Number(data.expires_in ?? 3600)
-    cachedToken = {
-      access_token:  data.access_token,
-      refresh_token: data.refresh_token,
-      expires_at:    now() + Math.max(60, expiresIn),
+      const data = JSON.parse(text)
+      cachedToken = {
+        access_token:  data.access_token,
+        refresh_token: data.refresh_token,
+        expires_at:    now() + Math.max(60, Number(data.expires_in ?? 3600)),
+      }
+      return cachedToken.access_token
     }
-    return cachedToken.access_token
+    return null
   } catch (e) {
     console.error('Token error:', String(e))
     return null
