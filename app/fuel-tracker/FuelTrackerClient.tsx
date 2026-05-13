@@ -53,7 +53,7 @@ export default function FuelTrackerClient() {
   const [fuelType, setFuelType] = useState<FuelType>('petrol')
   const [sortBy, setSortBy] = useState<SortType>('price')
   const [selectedBrand, setSelectedBrand] = useState('All')
-  const [radius, setRadius] = useState(5)
+  const [radius, setRadius] = useState(10)
   const [showFilters, setShowFilters] = useState(false)
   const [searchInput, setSearchInput] = useState('')
   const [locationLabel, setLocationLabel] = useState('Near you')
@@ -355,7 +355,7 @@ export default function FuelTrackerClient() {
 
         {/* Map */}
         <div className="flex-1 relative">
-          <FuelMap stations={sorted.map(s=>({id:s.id,name:s.name,brand:s.brand,address:s.address,postcode:s.postcode,lat:s.lat,lng:s.lng,petrol:s.petrol,diesel:s.diesel,lastUpdated:s.lastUpdated}))} center={mapCenter} zoom={12} />
+          <FuelMap stations={sorted.map(s=>({id:s.id,name:s.name,brand:s.brand,address:s.address,postcode:s.postcode,lat:s.lat,lng:s.lng,petrol:s.petrol,diesel:s.diesel,lastUpdated:s.lastUpdated}))} center={mapCenter} zoom={11} />
 
           <div className="absolute bottom-4 right-4 bg-white border border-gray-200 rounded-xl p-3 text-xs shadow-lg pointer-events-none">
             <p className="text-gray-500 font-medium mb-2">Price guide</p>
