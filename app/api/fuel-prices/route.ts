@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// Official UK Government Fuel Finder API
-// https://www.fuel-finder.service.gov.uk/api/v1
-// Covers ALL 8,000+ UK stations — BP, Shell, Esso, Tesco, Asda, Sainsbury's, independents etc.
+/**
+ * Official UK Government Fuel Finder API
+ * Base: https://api.fuelfinder.service.gov.uk/v1
+ * Auth: POST form-encoded with scope
+ * Covers ALL 8,000+ UK stations — BP, Shell, Esso, Tesco, Asda, Morrisons etc.
+ * Prices are in pence (e.g. 142.9 = 142.9p/litre) — NO conversion needed
+ */
 
-const GOV_API_BASE  = 'https://www.fuel-finder.service.gov.uk/api/v1'
-const GOV_TOKEN_URL = 'https://www.fuel-finder.service.gov.uk/api/v1/oauth/generate_access_token'
+const API_BASE  = process.env.FUEL_FINDER_API_BASE  || 'https://api.fuelfinder.service.gov.uk/v1'
+const TOKEN_URL = process.env.FUEL_FINDER_TOKEN_URL || 'https://api.fuelfinder.service.gov.uk/v1/oauth/generate_access_token'
 
-// CMA supermarket feeds as fallback
+// CMA direct supermarket feeds as fallback
 const CMA_SOURCES = [
   { brand: 'Tesco',        url: 'https://www.tesco.com/fuel_prices/fuel_prices_data.json' },
   { brand: "Sainsbury's",  url: 'https://api.sainsburys.co.uk/v1/exports/latest/fuel_prices_data.json' },
@@ -15,53 +19,39 @@ const CMA_SOURCES = [
   { brand: 'Morrisons',    url: 'https://www.morrisons.com/fuel-prices/fuel.json' },
 ]
 
-const BRAND_FACILITIES: Record<string, string[]> = {
-  'Tesco':        ['parking','convenience','atm','toilet','car_wash'],
-  "Sainsbury's":  ['parking','convenience','atm','toilet'],
-  'Asda':         ['parking','convenience','atm','toilet','car_wash'],
-  'Morrisons':    ['parking','convenience','atm','toilet','car_wash'],
-  'BP':           ['convenience','air_water','toilet','ev_charging','car_wash','wifi'],
-  'Shell':        ['convenience','air_water','toilet','ev_charging','car_wash','wifi'],
-  'Esso':         ['convenience','air_water','toilet'],
-  'Jet':          ['air_water'],
-  'Gulf':         ['air_water','convenience'],
-  'Texaco':       ['air_water','convenience'],
-  'Co-op':        ['convenience','atm'],
-}
-
-// Token cache
 let cachedToken: { token: string; expires: number } | null = null
 
-async function getGovToken(): Promise<string | null> {
+async function getToken(): Promise<string | null> {
   const clientId     = process.env.FUEL_FINDER_CLIENT_ID
   const clientSecret = process.env.FUEL_FINDER_CLIENT_SECRET
-  if (!clientId || !clientSecret) return null
+  if (!clientId || !clientSecret) { console.log('No Fuel Finder credentials'); return null }
   if (cachedToken && cachedToken.expires > Date.now()) return cachedToken.token
 
   try {
-    // Government API uses JSON body (not form-encoded)
-    const res = await fetch(GOV_TOKEN_URL, {
+    // Auth is FORM-ENCODED per official docs
+    const res = await fetch(TOKEN_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
         grant_type:    'client_credentials',
         client_id:     clientId,
         client_secret: clientSecret,
+        scope:         'fuel_finder',
       }),
       signal: AbortSignal.timeout(8000),
     })
-    if (!res.ok) {
-      console.error('Gov token error:', res.status, await res.text())
-      return null
-    }
-    const data = await res.json()
+    const text = await res.text()
+    console.log(`Token response ${res.status}:`, text.slice(0, 200))
+    if (!res.ok) return null
+
+    const data = JSON.parse(text)
     cachedToken = {
       token:   data.access_token,
-      expires: Date.now() + ((data.expires_in ?? 3600) - 60) * 1000,
+      expires: Date.now() + ((data.expires_in ?? 3600) - 120) * 1000,
     }
     return cachedToken.token
   } catch (e) {
-    console.error('Gov token fetch failed:', e)
+    console.error('Token error:', e)
     return null
   }
 }
@@ -74,81 +64,111 @@ function distanceMiles(lat1: number, lng1: number, lat2: number, lng2: number) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
 }
 
-function normalisePrice(raw: number | undefined | null): number | null {
-  if (!raw || raw <= 0) return null
-  if (raw > 500)  return raw / 10
-  if (raw > 50)   return raw
-  if (raw > 0.5)  return raw * 100
-  return null
+// Map real amenities from Gov API response
+function mapAmenities(amenities: Record<string, boolean> = {}): string[] {
+  const map: Record<string, string> = {
+    car_wash:             'car_wash',
+    air_pump_or_screenwash: 'air_water',
+    water_filling:        'air_water',
+    customer_toilets:     'toilet',
+    twenty_four_hour_fuel:'open_24h',
+    lpg_pumps:            'lpg',
+    adblue_pumps:         'adblue',
+  }
+  return Object.entries(amenities)
+    .filter(([, v]) => v === true)
+    .map(([k]) => map[k])
+    .filter(Boolean)
 }
 
+// Map official API station response to our format
+// Official fields: node_id, trading_name, brand_name, location{address_line_1, postcode, latitude, longitude}, amenities{...}
+// Fuel prices: fuel_prices[]{fuel_type, price, price_last_updated}
 function mapGovStation(s: Record<string, unknown>, lat: number, lng: number) {
-  const loc    = (s.location as Record<string,number>) ?? {}
-  const prices = (s.prices as Record<string,number>)   ?? {}
-  const sLat   = Number(loc.latitude  ?? loc.lat ?? 0)
-  const sLng   = Number(loc.longitude ?? loc.lng ?? 0)
-  const brand  = String(s.brand ?? s.operator ?? '')
-  const address = String(s.address ?? s.site_address ?? '')
-  const postcode = String(s.postcode ?? '')
+  const loc      = (s.location as Record<string, unknown>) ?? {}
+  const amenities= (s.amenities as Record<string, boolean>) ?? {}
+  const fuelPrices = (s.fuel_prices as Array<Record<string, unknown>>) ?? []
+
+  const sLat = Number(loc.latitude  ?? 0)
+  const sLng = Number(loc.longitude ?? 0)
+  const brand = String(s.brand_name ?? s.trading_name ?? '')
+  const address = [loc.address_line_1, loc.address_line_2].filter(Boolean).join(', ')
+  const postcode = String(loc.postcode ?? '')
+
+  // Prices: already in pence (e.g. 142.9)
+  const getPrice = (type: string) => {
+    const fp = fuelPrices.find(f => String(f.fuel_type).toLowerCase() === type.toLowerCase())
+    return fp ? Number(fp.price) : null
+  }
 
   return {
-    id:             String(s.site_id ?? s.id ?? Math.random()),
-    name:           address ? `${brand} – ${address.split(',')[0]}` : `${brand} ${postcode}`,
+    id:             String(s.node_id ?? s.id ?? Math.random()),
+    name:           address ? `${brand} – ${String(loc.address_line_1 ?? '').split(',')[0]}` : `${brand} ${postcode}`,
     brand,
     address,
     postcode,
     lat:            sLat,
     lng:            sLng,
-    petrol:         normalisePrice(prices.E10  ?? prices.e10),
-    diesel:         normalisePrice(prices.B7   ?? prices.b7),
-    super_unleaded: normalisePrice(prices.E5   ?? prices.e5),
-    premium_diesel: normalisePrice(prices.SDV  ?? prices.sdv),
-    facilities:     BRAND_FACILITIES[brand] ?? ['air_water'],
-    lastUpdated:    String(s.last_updated ?? s.updated_at ?? new Date().toISOString()),
+    petrol:         getPrice('E10'),
+    diesel:         getPrice('B7_Standard'),
+    super_unleaded: getPrice('E5'),
+    premium_diesel: getPrice('B7_Premium'),
+    facilities:     mapAmenities(amenities),
+    lastUpdated:    String(fuelPrices[0]?.price_last_updated ?? new Date().toISOString()),
     distanceMiles:  distanceMiles(lat, lng, sLat, sLng),
   }
 }
 
-async function fetchGovStations(token: string, lat: number, lng: number, radius: number) {
-  // Fetch pages until we have enough nearby stations
-  const stations = []
-  let page = 1
-  const maxPages = 20 // ~10,000 stations max
+async function fetchGovData(token: string, lat: number, lng: number, radius: number) {
+  // Try combined endpoint first, then separate PFS + prices
+  const endpoints = [
+    `${API_BASE}/pfs?lat=${lat}&lng=${lng}&radius=${radius}&include_prices=true`,
+    `${API_BASE}/stations?lat=${lat}&lng=${lng}&radius=${radius}`,
+    `${API_BASE}/prices?lat=${lat}&lng=${lng}&radius=${radius}`,
+    `${API_BASE}/pfs`,  // paginated all-stations fallback
+  ]
 
-  while (page <= maxPages) {
+  for (const url of endpoints) {
     try {
-      const res = await fetch(`${GOV_API_BASE}/pfs?page=${page}&per_page=500`, {
+      console.log('Trying endpoint:', url)
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-        signal: AbortSignal.timeout(10000),
-        next: { revalidate: 900 },
+        signal:  AbortSignal.timeout(10000),
+        next:    { revalidate: 900 },
       })
-      if (!res.ok) {
-        console.error(`Gov API page ${page} error:`, res.status)
-        break
-      }
+      console.log(`${url} → ${res.status}`)
+      if (!res.ok) continue
+
       const data = await res.json()
-      const pageStations: Record<string,unknown>[] = data.stations ?? data.data ?? data ?? []
-      
-      if (!Array.isArray(pageStations) || pageStations.length === 0) break
+      // Handle various response shapes
+      const raw: Record<string, unknown>[] =
+        data.stations ?? data.pfs ?? data.data ?? data.results ??
+        (Array.isArray(data) ? data : [])
 
-      const nearby = pageStations
+      if (!Array.isArray(raw) || raw.length === 0) continue
+
+      const stations = raw
         .map(s => mapGovStation(s, lat, lng))
-        .filter(s => s.lat && s.lng && s.distanceMiles <= radius)
+        .filter(s => s.lat && s.lng)
+        .filter(s => url.includes('lat=') ? true : s.distanceMiles <= radius)
+        .sort((a, b) => (a.petrol ?? 999) - (b.petrol ?? 999))
+        .slice(0, 100)
 
-      stations.push(...nearby)
-      console.log(`Page ${page}: ${pageStations.length} stations, ${nearby.length} nearby, total: ${stations.length}`)
-
-      // If this page had no nearby stations and we've already found some, we can likely stop
-      if (nearby.length === 0 && stations.length > 0 && page > 3) break
-      if (pageStations.length < 500) break // Last page
-      page++
+      console.log(`Got ${stations.length} stations from ${url}`)
+      if (stations.length > 0) return { stations, endpoint: url }
     } catch (e) {
-      console.error(`Gov API page ${page} failed:`, e)
-      break
+      console.error('Endpoint failed:', url, e)
     }
   }
+  return { stations: [], endpoint: null }
+}
 
-  return stations.sort((a, b) => (a.petrol ?? 999) - (b.petrol ?? 999)).slice(0, 100)
+// Fallback: CMA direct supermarket feeds
+function normalisePrice(raw: number | undefined | null): number | null {
+  if (!raw || raw <= 0) return null
+  if (raw > 500) return raw / 10
+  if (raw > 50)  return raw
+  return null
 }
 
 async function fetchCMABrand(source: typeof CMA_SOURCES[0]) {
@@ -160,10 +180,10 @@ async function fetchCMABrand(source: typeof CMA_SOURCES[0]) {
     })
     if (!res.ok) return []
     const data = await res.json()
-    const stations: Record<string,unknown>[] = data.stations ?? data.data?.stations ?? []
+    const stations: Record<string, unknown>[] = data.stations ?? data.data?.stations ?? []
     return stations.map(s => {
-      const prices  = (s.prices as Record<string,number>) ?? {}
-      const loc     = (s.location as Record<string,number>) ?? {}
+      const prices  = (s.prices as Record<string, number>) ?? {}
+      const loc     = (s.location as Record<string, number>) ?? {}
       const address = String(s.address ?? s.storeName ?? '')
       const postcode = String(s.postcode ?? '')
       return {
@@ -176,8 +196,8 @@ async function fetchCMABrand(source: typeof CMA_SOURCES[0]) {
         petrol:         normalisePrice(prices.E10 ?? prices.e10),
         diesel:         normalisePrice(prices.B7  ?? prices.b7),
         super_unleaded: normalisePrice(prices.E5  ?? prices.e5),
-        premium_diesel: normalisePrice(prices.SDV ?? prices.sdv),
-        facilities:     BRAND_FACILITIES[source.brand] ?? ['air_water'],
+        premium_diesel: null,
+        facilities:     ['parking', 'convenience', 'atm', 'toilet'],
         lastUpdated:    new Date().toISOString(),
       }
     })
@@ -190,31 +210,25 @@ export async function GET(req: NextRequest) {
   const lng    = parseFloat(searchParams.get('lng')    || '-1.257')
   const radius = parseFloat(searchParams.get('radius') || '10')
 
-  // 1. Try Official Government Fuel Finder API (all 8,000+ stations)
-  const token = await getGovToken()
+  // 1. Official Gov Fuel Finder
+  const token = await getToken()
   if (token) {
-    console.log('Using Official Gov Fuel Finder API')
-    const stations = await fetchGovStations(token, lat, lng, radius)
+    const { stations, endpoint } = await fetchGovData(token, lat, lng, radius)
     if (stations.length > 0) {
-      return NextResponse.json({ stations, source: 'gov_fuel_finder', total: stations.length })
+      return NextResponse.json({ stations, source: 'gov_fuel_finder', endpoint, total: stations.length })
     }
-    console.log('Gov API returned 0 nearby stations, falling back to CMA direct feeds')
   }
 
-  // 2. Fallback: CMA direct supermarket feeds
-  console.log('Using CMA direct feeds fallback')
+  // 2. CMA direct feeds fallback
+  console.log('Falling back to CMA direct feeds')
   const results  = await Promise.allSettled(CMA_SOURCES.map(fetchCMABrand))
   const all      = results.flatMap(r => r.status === 'fulfilled' ? r.value : [])
   const nearby   = all
     .filter(s => s.lat && s.lng)
-    .map(s => ({ ...s, distanceMiles: distanceMiles(lat, lng, s.lat, s.lng) }))
+    .map(s => ({ ...s, distanceMiles: distanceMiles(lat, lng, Number(s.lat), Number(s.lng)) }))
     .filter(s => s.distanceMiles <= radius)
     .sort((a, b) => (a.petrol ?? 999) - (b.petrol ?? 999))
     .slice(0, 100)
 
-  return NextResponse.json({
-    stations: nearby,
-    source:   nearby.length > 0 ? 'cma_direct' : 'unavailable',
-    total:    nearby.length,
-  })
+  return NextResponse.json({ stations: nearby, source: 'cma_direct', total: nearby.length })
 }
