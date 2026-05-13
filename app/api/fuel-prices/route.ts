@@ -1,18 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-/**
- * Official UK Government Fuel Finder API
- * Base: https://www.fuel-finder.service.gov.uk
- * Token: POST /api/v1/oauth/generate_access_token — JSON body, NO scope
- * Stations: GET /api/v1/pfs?page=N — paginated, all UK stations
- * Prices:   GET /api/v1/pfs/fuel-prices?page=N — paginated, all prices
- * Rate limit: 100 req/min — fetch paginated, cache results
- */
+// Force this serverless function to run from London (UK) — Gov API blocks non-UK IPs
+export const preferredRegion = 'lhr1'
+export const maxDuration = 30
 
 const API_BASE  = 'https://www.fuel-finder.service.gov.uk'
-const TOKEN_URL = `${API_BASE}/api/v1/oauth/generate_access_token`
 
-// CMA supermarket direct feeds as fallback
+// CMA direct feeds as fallback
 const CMA_SOURCES = [
   { brand: 'Tesco',        url: 'https://www.tesco.com/fuel_prices/fuel_prices_data.json' },
   { brand: "Sainsbury's",  url: 'https://api.sainsburys.co.uk/v1/exports/latest/fuel_prices_data.json' },
@@ -20,37 +14,49 @@ const CMA_SOURCES = [
   { brand: 'Morrisons',    url: 'https://www.morrisons.com/fuel-prices/fuel.json' },
 ]
 
-// Token cache
-let cachedToken: { token: string; expires: number } | null = null
+let cachedToken: { access_token: string; refresh_token?: string; expires_at: number } | null = null
+
+function now() { return Math.floor(Date.now() / 1000) }
 
 async function getToken(): Promise<string | null> {
   const clientId     = process.env.FUEL_FINDER_CLIENT_ID
   const clientSecret = process.env.FUEL_FINDER_CLIENT_SECRET
   if (!clientId || !clientSecret) return null
-  if (cachedToken && cachedToken.expires > Date.now()) return cachedToken.token
+
+  // Use cached token if still valid (with 30s skew)
+  if (cachedToken?.access_token && cachedToken.expires_at > now() + 30) {
+    return cachedToken.access_token
+  }
+
+  // Use refresh token if available
+  const useRefresh = !!cachedToken?.refresh_token
+  const url  = useRefresh
+    ? `${API_BASE}/api/v1/oauth/regenerate_access_token`
+    : `${API_BASE}/api/v1/oauth/generate_access_token`
+  // KEY: NO grant_type field — just client_id + client_secret
+  const body = useRefresh
+    ? { client_id: clientId, refresh_token: cachedToken!.refresh_token }
+    : { client_id: clientId, client_secret: clientSecret }
 
   try {
-    // Auth uses JSON body — no scope parameter
-    const res = await fetch(TOKEN_URL, {
+    const res = await fetch(url, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({
-        grant_type:    'client_credentials',
-        client_id:     clientId,
-        client_secret: clientSecret,
-      }),
-      signal: AbortSignal.timeout(8000),
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body:    JSON.stringify(body),
+      signal:  AbortSignal.timeout(10000),
     })
     const text = await res.text()
-    console.log(`Token ${res.status}:`, text.slice(0, 150))
+    console.log(`Token ${res.status}:`, text.slice(0, 200))
     if (!res.ok) return null
 
     const data = JSON.parse(text)
+    const expiresIn = Number(data.expires_in ?? 3600)
     cachedToken = {
-      token:   data.access_token,
-      expires: Date.now() + ((data.expires_in ?? 3600) - 120) * 1000,
+      access_token:  data.access_token,
+      refresh_token: data.refresh_token,
+      expires_at:    now() + Math.max(60, expiresIn),
     }
-    return cachedToken.token
+    return cachedToken.access_token
   } catch (e) {
     console.error('Token error:', String(e))
     return null
@@ -67,49 +73,31 @@ function distanceMiles(lat1: number, lng1: number, lat2: number, lng2: number) {
 
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)) }
 
-// Fetch all paginated pages from an endpoint
-async function fetchAllPages(endpoint: string, token: string): Promise<Record<string,unknown>[]> {
-  const results: Record<string,unknown>[] = []
+async function fetchBatched(path: string, token: string): Promise<Record<string, unknown>[]> {
+  const results: Record<string, unknown>[] = []
   let page = 1
   let lastReq = 0
 
-  while (true) {
-    const elapsed = Date.now() - lastReq
-    if (elapsed < 700) await sleep(700 - elapsed) // respect 100 RPM limit
+  while (page <= 40) {
+    const gap = Date.now() - lastReq
+    if (gap < 700) await sleep(700 - gap)
     lastReq = Date.now()
 
-    const res = await fetch(`${API_BASE}${endpoint}?page=${page}`, {
+    const res = await fetch(`${API_BASE}${path}?page=${page}`, {
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-      signal:  AbortSignal.timeout(10000),
-      next:    { revalidate: 900 },
+      signal: AbortSignal.timeout(15000),
+      next: { revalidate: 900 },
     })
-    console.log(`GET ${endpoint} page ${page} → ${res.status}`)
+    console.log(`${path} page ${page} → ${res.status}`)
     if (!res.ok) break
 
-    const data = await res.json()
-    // Handle response shape: items array or direct array
-    const items: Record<string,unknown>[] = data.items ?? data.data ?? (Array.isArray(data) ? data : [])
-    if (items.length === 0) break
-
-    results.push(...items)
-    if (!data.next_page && !data.hasMore && items.length < 500) break
+    const batch: Record<string, unknown>[] = await res.json()
+    if (!Array.isArray(batch) || batch.length === 0) break
+    results.push(...batch)
+    if (batch.length < 500) break
     page++
-
-    // Safety: stop after 40 pages (~20k stations)
-    if (page > 40) break
   }
   return results
-}
-
-function mapAmenities(a: Record<string, boolean> = {}) {
-  const r: string[] = []
-  if (a.car_wash)               r.push('car_wash')
-  if (a.air_pump_or_screenwash) r.push('air_water')
-  if (a.water_filling)          r.push('air_water')
-  if (a.customer_toilets)       r.push('toilet')
-  if (a.twenty_four_hour_fuel)  r.push('open_24h')
-  if (a.lpg_pumps)              r.push('lpg')
-  return [...new Set(r)]
 }
 
 export async function GET(req: NextRequest) {
@@ -118,61 +106,57 @@ export async function GET(req: NextRequest) {
   const lng    = parseFloat(searchParams.get('lng')    || '-1.257')
   const radius = parseFloat(searchParams.get('radius') || '10')
 
-  // 1. Official Gov Fuel Finder API
+  // 1. Official Gov Fuel Finder (all 8000+ UK stations)
   const token = await getToken()
   if (token) {
     try {
-      // Fetch stations and prices concurrently
-      const [stationsRaw, pricesRaw] = await Promise.all([
-        fetchAllPages('/api/v1/pfs', token),
-        fetchAllPages('/api/v1/pfs/fuel-prices', token),
+      const [stations, prices] = await Promise.all([
+        fetchBatched('/api/v1/pfs', token),
+        fetchBatched('/api/v1/pfs/fuel-prices', token),
       ])
-      console.log(`Gov API: ${stationsRaw.length} stations, ${pricesRaw.length} price records`)
+      console.log(`Got ${stations.length} stations, ${prices.length} prices`)
 
-      // Build price lookup by node_id
+      // Build price lookup: node_id → { fuel_type: price }
       const priceMap = new Map<string, Record<string, number>>()
-      for (const p of pricesRaw) {
-        const nodeId = String(p.node_id ?? '')
-        if (!nodeId) continue
-        const existing = priceMap.get(nodeId) ?? {}
-        // Each record has fuel_type + price
-        const fuelType = String(p.fuel_type ?? '')
-        const price    = Number(p.price ?? 0)
-        if (fuelType && price) existing[fuelType] = price
-        priceMap.set(nodeId, existing)
+      for (const p of prices) {
+        const id = String(p.node_id ?? '')
+        if (!id) continue
+        const m = priceMap.get(id) ?? {}
+        m[String(p.fuel_type ?? '')] = Number(p.price ?? 0)
+        priceMap.set(id, m)
       }
 
-      // Filter stations within radius
-      const nearby = stationsRaw
+      const nearby = stations
         .map(s => {
-          const loc      = (s.location as Record<string,unknown>) ?? {}
-          const amenities= (s.amenities as Record<string,boolean>) ?? {}
-          const sLat     = Number(loc.latitude  ?? 0)
-          const sLng     = Number(loc.longitude ?? 0)
+          const loc = (s.location as Record<string, unknown>) ?? {}
+          const am  = (s.amenities as Record<string, boolean>) ?? {}
+          const sLat = Number(loc.latitude ?? 0)
+          const sLng = Number(loc.longitude ?? 0)
           if (!sLat || !sLng) return null
-
           const dist = distanceMiles(lat, lng, sLat, sLng)
           if (dist > radius) return null
 
-          const nodeId = String(s.node_id ?? '')
-          const prices = priceMap.get(nodeId) ?? {}
-          const brand  = String(s.brand_name ?? s.trading_name ?? '')
-          const addr1  = String(loc.address_line_1 ?? '')
-          const postcode = String(loc.postcode ?? '')
+          const id    = String(s.node_id ?? Math.random())
+          const p     = priceMap.get(id) ?? {}
+          const brand = String(s.brand_name ?? s.trading_name ?? '')
+          const addr  = String(loc.address_line_1 ?? '')
+          const pc    = String(loc.postcode ?? '')
+          const facs: string[] = []
+          if (am.car_wash)               facs.push('car_wash')
+          if (am.air_pump_or_screenwash) facs.push('air_water')
+          if (am.customer_toilets)       facs.push('toilet')
+          if (am.twenty_four_hour_fuel)  facs.push('open_24h')
+          if (am.lpg_pumps)              facs.push('lpg')
 
           return {
-            id:             nodeId || String(Math.random()),
-            name:           addr1 ? `${brand} – ${addr1.split(',')[0]}` : `${brand} ${postcode}`,
-            brand,
-            address:        [addr1, loc.address_line_2].filter(Boolean).join(', '),
-            postcode,
-            lat:            sLat,
-            lng:            sLng,
-            petrol:         prices['E10']         ?? prices['e10']         ?? null,
-            diesel:         prices['B7_Standard'] ?? prices['B7_STANDARD'] ?? null,
-            super_unleaded: prices['E5']          ?? prices['e5']          ?? null,
-            premium_diesel: prices['B7_Premium']  ?? prices['B7_PREMIUM']  ?? null,
-            facilities:     mapAmenities(amenities),
+            id, brand,
+            name:           addr ? `${brand} – ${addr.split(',')[0]}` : `${brand} ${pc}`,
+            address:        addr, postcode: pc, lat: sLat, lng: sLng,
+            petrol:         p['E10']         ?? p['e10']         ?? null,
+            diesel:         p['B7_Standard'] ?? p['B7_STANDARD'] ?? p['B7']  ?? null,
+            super_unleaded: p['E5']          ?? p['e5']          ?? null,
+            premium_diesel: p['B7_Premium']  ?? p['B7_PREMIUM']  ?? null,
+            facilities:     facs,
             lastUpdated:    String(s.last_updated ?? new Date().toISOString()),
             distanceMiles:  dist,
           }
@@ -184,40 +168,32 @@ export async function GET(req: NextRequest) {
       if (nearby.length > 0) {
         return NextResponse.json({ stations: nearby, source: 'gov_fuel_finder', total: nearby.length })
       }
-      console.log('Gov API returned 0 nearby stations')
     } catch (e) {
       console.error('Gov API error:', String(e))
     }
   }
 
-  // 2. CMA direct feeds fallback
-  const results = await Promise.allSettled(CMA_SOURCES.map(async source => {
+  // 2. CMA fallback
+  const results = await Promise.allSettled(CMA_SOURCES.map(async src => {
     try {
-      const res = await fetch(source.url, {
-        next: { revalidate: 900 },
-        headers: { 'User-Agent': 'FuelGeniusPro/1.0' },
-        signal: AbortSignal.timeout(8000),
-      })
+      const res = await fetch(src.url, { next: { revalidate: 900 }, signal: AbortSignal.timeout(8000) })
       if (!res.ok) return []
       const data = await res.json()
-      const stations: Record<string,unknown>[] = data.stations ?? data.data?.stations ?? []
-      return stations.map(s => {
-        const prices = (s.prices as Record<string,number>) ?? {}
-        const loc    = (s.location as Record<string,number>) ?? {}
-        const addr   = String(s.address ?? s.storeName ?? '')
-        const pc     = String(s.postcode ?? '')
-        const sLat   = Number(loc.latitude ?? loc.lat ?? s.lat ?? 0)
-        const sLng   = Number(loc.longitude ?? loc.lng ?? s.lng ?? 0)
-        const p = (v: number | undefined) => (!v || v <= 0) ? null : v > 500 ? v/10 : v > 50 ? v : null
+      const ss: Record<string, unknown>[] = data.stations ?? data.data?.stations ?? []
+      return ss.map(s => {
+        const pr = (s.prices as Record<string, number>) ?? {}
+        const lo = (s.location as Record<string, number>) ?? {}
+        const ad = String(s.address ?? s.storeName ?? '')
+        const pc = String(s.postcode ?? '')
+        const p  = (v?: number) => !v || v <= 0 ? null : v > 500 ? v/10 : v > 50 ? v : null
         return {
-          id: String(s.site_id ?? s.id ?? Math.random()),
-          name: addr ? `${source.brand} – ${addr.split(',')[0]}` : `${source.brand} ${pc}`,
-          brand: source.brand, address: addr, postcode: pc,
-          lat: sLat, lng: sLng,
-          petrol: p(prices.E10 ?? prices.e10),
-          diesel: p(prices.B7  ?? prices.b7),
-          super_unleaded: p(prices.E5 ?? prices.e5),
-          premium_diesel: null,
+          id: String(s.site_id ?? s.id ?? Math.random()), brand: src.brand,
+          name: ad ? `${src.brand} – ${ad.split(',')[0]}` : `${src.brand} ${pc}`,
+          address: ad, postcode: pc,
+          lat:  Number(lo.latitude  ?? lo.lat ?? s.lat ?? 0),
+          lng:  Number(lo.longitude ?? lo.lng ?? s.lng ?? 0),
+          petrol: p(pr.E10 ?? pr.e10), diesel: p(pr.B7 ?? pr.b7),
+          super_unleaded: p(pr.E5 ?? pr.e5), premium_diesel: null,
           facilities: ['parking','convenience','atm','toilet'],
           lastUpdated: new Date().toISOString(),
         }
