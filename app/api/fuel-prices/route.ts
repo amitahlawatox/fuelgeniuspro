@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 
 /**
  * Official UK Government Fuel Finder API
- * Base: https://api.fuelfinder.service.gov.uk/v1
+ * Base: https://api.fuel-finder.service.gov.uk/v1
  * Auth: POST form-encoded with scope
  * Covers ALL 8,000+ UK stations — BP, Shell, Esso, Tesco, Asda, Morrisons etc.
  * Prices are in pence (e.g. 142.9 = 142.9p/litre) — NO conversion needed
  */
 
-const API_BASE  = process.env.FUEL_FINDER_API_BASE  || 'https://api.fuelfinder.service.gov.uk/v1'
-const TOKEN_URL = process.env.FUEL_FINDER_TOKEN_URL || 'https://api.fuelfinder.service.gov.uk/v1/oauth/generate_access_token'
+const API_BASE  = process.env.FUEL_FINDER_API_BASE  || 'https://api.fuel-finder.service.gov.uk/v1'
+const TOKEN_URL = process.env.FUEL_FINDER_TOKEN_URL || 'https://api.fuel-finder.service.gov.uk/v1/oauth/generate_access_token'
 
 // CMA direct supermarket feeds as fallback
 const CMA_SOURCES = [
@@ -31,10 +31,10 @@ async function getToken(): Promise<string | null> {
     // Auth is FORM-ENCODED per official docs
     // Try multiple token URL + scope combinations from official docs
     const attempts = [
-      { url: 'https://api.fuelfinder.service.gov.uk/v1/oauth/generate_access_token', scope: undefined },
-      { url: 'https://api.fuelfinder.service.gov.uk/v1/oauth/generate_access_token', scope: 'fuel_finder' },
-      { url: 'https://api.fuelfinder.service.gov.uk/v1/oauth/token', scope: undefined },
-      { url: 'https://api.fuelfinder.service.gov.uk/oauth/generate_access_token', scope: undefined },
+      { url: 'https://api.fuel-finder.service.gov.uk/v1/oauth/generate_access_token', scope: undefined },
+      { url: 'https://api.fuel-finder.service.gov.uk/v1/oauth/generate_access_token', scope: 'fuel_finder' },
+      { url: 'https://api.fuel-finder.service.gov.uk/v1/oauth/token', scope: undefined },
+      { url: 'https://api.fuel-finder.service.gov.uk/oauth/generate_access_token', scope: undefined },
       { url: TOKEN_URL, scope: undefined },
     ]
     
