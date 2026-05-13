@@ -22,9 +22,7 @@ interface Station {
   id: string; name: string; brand: string; address: string; postcode: string
   lat: number; lng: number; petrol: number | null; diesel: number | null
   super_unleaded?: number | null; premium_diesel?: number | null
-  facilities?: string[]
-  super_unleaded?: number | null; premium_diesel?: number | null
-  lastUpdated: string; distanceMiles?: number; facilities?: string[]
+  facilities?: string[]; lastUpdated: string; distanceMiles?: number
 }
 
 const BRANDS = ['All','Asda','BP','Co-op','Esso','Gulf','Jet','Morrisons',"Sainsbury's",'Shell','Tesco','Texaco']
