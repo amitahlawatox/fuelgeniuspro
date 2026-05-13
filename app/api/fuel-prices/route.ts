@@ -1,11 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+// All major UK CMA mandatory reporters
 const CMA_SOURCES = [
-  { brand: 'Tesco', url: 'https://www.tesco.com/fuel_prices/fuel_prices_data.json' },
-  { brand: 'Asda', url: 'https://storelocator.asda.com/fuel_prices_data.json' },
-  { brand: "Sainsbury's", url: 'https://api.sainsburys.co.uk/v1/exports/latest/fuel_prices_data.json' },
-  { brand: 'Morrisons', url: 'https://www.morrisons.com/fuel-prices/fuel.json' },
+  { brand: 'Tesco',        url: 'https://www.tesco.com/fuel_prices/fuel_prices_data.json' },
+  { brand: 'Asda',         url: 'https://storelocator.asda.com/fuel_prices_data.json' },
+  { brand: "Sainsbury's",  url: 'https://api.sainsburys.co.uk/v1/exports/latest/fuel_prices_data.json' },
+  { brand: 'Morrisons',    url: 'https://www.morrisons.com/fuel-prices/fuel.json' },
+  { brand: 'BP',           url: 'https://www.bp.com/content/dam/bp/country-sites/en_gb/united-kingdom/home/products-and-services/fuel/bp-retail-prices.json' },
+  { brand: 'Shell',        url: 'https://www.shell.co.uk/motorist/shell-fuels/shell-fuel-prices.html.fuel-data.json' },
+  { brand: 'Esso',         url: 'https://fuelprices.esso.co.uk/raw_data.json' },
+  { brand: 'Jet',          url: 'https://www.jet.co.uk/fuel-prices/fuel_prices_data.json' },
+  { brand: 'Gulf',         url: 'https://www.gulf.co.uk/fuel-prices/fuel_prices_data.json' },
 ]
+
+// Brand → typical facilities (CMA feed has no facility data)
+const BRAND_FACILITIES: Record<string, string[]> = {
+  'BP':          ['⛽ Fuel','🅿️ Parking','🏪 Shop','🚻 Toilets','💧 Air & Water','🏧 ATM','🚗 Car Wash','⚡ EV Charging'],
+  'Shell':       ['⛽ Fuel','🅿️ Parking','🏪 Shop','🚻 Toilets','💧 Air & Water','🏧 ATM','🚗 Car Wash','⚡ EV Charging'],
+  'Esso':        ['⛽ Fuel','🅿️ Parking','🏪 Shop','🚻 Toilets','💧 Air & Water','🏧 ATM','🚗 Car Wash'],
+  'Tesco':       ['⛽ Fuel','🅿️ Parking','🏪 Supermarket','🚻 Toilets','🏧 ATM','♿ Disabled','☕ Café'],
+  "Sainsbury's": ['⛽ Fuel','🅿️ Parking','🏪 Supermarket','🚻 Toilets','🏧 ATM','♿ Disabled'],
+  'Asda':        ['⛽ Fuel','🅿️ Parking','🏪 Supermarket','🚻 Toilets','🏧 ATM','♿ Disabled'],
+  'Morrisons':   ['⛽ Fuel','🅿️ Parking','🏪 Supermarket','🚻 Toilets','🏧 ATM','♿ Disabled'],
+  'Jet':         ['⛽ Fuel','🅿️ Parking','🏪 Shop','🚻 Toilets','💧 Air & Water'],
+  'Gulf':        ['⛽ Fuel','🅿️ Parking','🏪 Shop','🚻 Toilets','💧 Air & Water'],
+  'Texaco':      ['⛽ Fuel','🅿️ Parking','🏪 Shop','🚻 Toilets','💧 Air & Water','🚗 Car Wash'],
+  'default':     ['⛽ Fuel','🅿️ Parking','🏪 Shop','🚻 Toilets'],
+}
+
+function getFacilities(brand: string): string[] {
+  return BRAND_FACILITIES[brand] ?? BRAND_FACILITIES['default']
+}
 
 function distanceMiles(lat1: number, lng1: number, lat2: number, lng2: number) {
   const R = 3958.8
@@ -15,12 +40,11 @@ function distanceMiles(lat1: number, lng1: number, lat2: number, lng2: number) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
 }
 
-// Smart price normaliser — handles pence*10 integers (Tesco: 1429) AND decimal pence (Sainsburys: 142.9)
 function normalisePrice(raw: number | undefined | null): number | null {
   if (!raw || raw <= 0) return null
-  if (raw > 500) return raw / 10      // e.g. 1429 → 142.9p
-  if (raw > 50)  return raw           // e.g. 142.9 → already in pence
-  if (raw > 0)   return raw * 100     // e.g. 1.429 → rare, convert
+  if (raw > 500) return parseFloat((raw / 10).toFixed(1))
+  if (raw > 50)  return parseFloat(raw.toFixed(1))
+  if (raw > 0)   return parseFloat((raw * 100).toFixed(1))
   return null
 }
 
@@ -28,94 +52,100 @@ async function fetchBrand(source: typeof CMA_SOURCES[0]) {
   try {
     const res = await fetch(source.url, {
       next: { revalidate: 900 },
-      headers: { 'User-Agent': 'FuelGeniusPro/1.0 (fuel price aggregator)', 'Accept': 'application/json' },
+      headers: { 'User-Agent': 'Mozilla/5.0 FuelGeniusPro/1.0', 'Accept': 'application/json' },
       signal: AbortSignal.timeout(8000),
     })
     if (!res.ok) return []
     const data = await res.json()
     const stations = data.stations ?? data.data?.stations ?? data.stationList ?? data ?? []
     if (!Array.isArray(stations)) return []
+
     return stations.map((s: Record<string, unknown>) => {
       const prices = (s.prices as Record<string, number>) ?? {}
-      const loc = (s.location as Record<string, number>) ?? {}
+      const loc = (s.location as Record<string, unknown>) ?? {}
+      const address = String(s.address ?? s.storeName ?? s.store_name ?? s.name ?? '')
+      const postcode = String(s.postcode ?? s.postal_code ?? '')
+      const brand = String(s.brand ?? source.brand)
+
       return {
         id: String(s.site_id ?? s.id ?? s.storeId ?? Math.random()),
-        brand: source.brand,
-        address: String(s.address ?? s.storeName ?? s.store_name ?? ''),
-        postcode: String(s.postcode ?? s.postal_code ?? ''),
-        lat: Number(loc.latitude ?? loc.lat ?? s.lat ?? s.latitude ?? 0),
-        lng: Number(loc.longitude ?? loc.lng ?? s.lng ?? s.longitude ?? 0),
-        petrol: normalisePrice(prices.E10 ?? prices.e10 ?? prices.Unleaded),
-        diesel: normalisePrice(prices.B7 ?? prices.b7 ?? prices.Diesel ?? prices.diesel),
-        super_unleaded: normalisePrice(prices.E5 ?? prices.e5 ?? prices.SuperUnleaded),
+        name: address || `${brand} ${postcode}`,   // ← FIX: always set a name
+        brand,
+        address,
+        postcode,
+        lat: Number((loc as Record<string,number>).latitude ?? (loc as Record<string,number>).lat ?? s.lat ?? s.latitude ?? 0),
+        lng: Number((loc as Record<string,number>).longitude ?? (loc as Record<string,number>).lng ?? s.lng ?? s.longitude ?? 0),
+        petrol:          normalisePrice(prices.E10 ?? prices.e10 ?? prices.Unleaded ?? prices.unleaded),
+        diesel:          normalisePrice(prices.B7 ?? prices.b7 ?? prices.Diesel ?? prices.diesel),
+        super_unleaded:  normalisePrice(prices.E5 ?? prices.e5 ?? prices.SDV ?? prices.Super ?? prices.super_unleaded),
+        premium_diesel:  normalisePrice(prices.B20 ?? prices.PremiumDiesel ?? prices.premium_diesel),
+        facilities: getFacilities(brand),
         lastUpdated: new Date().toISOString(),
       }
     })
   } catch (e) {
-    console.error(`Failed to fetch ${source.brand}:`, e)
+    console.log(`${source.brand} unavailable: ${e}`)
     return []
   }
 }
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
-  const lat = parseFloat(searchParams.get('lat') || '51.752')
-  const lng = parseFloat(searchParams.get('lng') || '-1.257')
+  const lat  = parseFloat(searchParams.get('lat') || '51.752')
+  const lng  = parseFloat(searchParams.get('lng') || '-1.257')
   const radius = parseFloat(searchParams.get('radius') || '10')
 
+  // 1. Try Fuel Finder (has ALL UK stations including BP/Shell/Esso)
   try {
-    // Try Fuel Finder API first
-    const clientId = process.env.FUEL_FINDER_CLIENT_ID
+    const clientId     = process.env.FUEL_FINDER_CLIENT_ID
     const clientSecret = process.env.FUEL_FINDER_CLIENT_SECRET
-    const tokenUrl = process.env.FUEL_FINDER_TOKEN_URL
-    const apiBase = process.env.FUEL_FINDER_API_BASE
+    const tokenUrl     = process.env.FUEL_FINDER_TOKEN_URL
+    const apiBase      = process.env.FUEL_FINDER_API_BASE
 
     if (clientId && clientSecret && tokenUrl && apiBase) {
-      try {
-        const tokenRes = await fetch(tokenUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ grant_type: 'client_credentials', client_id: clientId, client_secret: clientSecret }),
-          signal: AbortSignal.timeout(5000),
-        })
-        if (tokenRes.ok) {
-          const { access_token } = await tokenRes.json()
-          const dataRes = await fetch(`${apiBase}/stations?lat=${lat}&lng=${lng}&radius=${radius}&limit=100`, {
-            headers: { Authorization: `Bearer ${access_token}` },
-            signal: AbortSignal.timeout(8000),
-          })
-          if (dataRes.ok) {
-            const data = await dataRes.json()
-            const stations = data.stations || data
-            if (Array.isArray(stations) && stations.length > 0) {
-              return NextResponse.json({ stations, source: 'fuel_finder' })
-            }
+      const tokenRes = await fetch(tokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ grant_type: 'client_credentials', client_id: clientId, client_secret: clientSecret }),
+        signal: AbortSignal.timeout(6000),
+      })
+      if (tokenRes.ok) {
+        const { access_token } = await tokenRes.json()
+        const dataRes = await fetch(
+          `${apiBase}/stations?lat=${lat}&lng=${lng}&radius=${radius}&limit=150&sort=price`,
+          { headers: { Authorization: `Bearer ${access_token}` }, signal: AbortSignal.timeout(8000) }
+        )
+        if (dataRes.ok) {
+          const data = await dataRes.json()
+          const stations = data.stations ?? data ?? []
+          if (Array.isArray(stations) && stations.length > 0) {
+            return NextResponse.json({ stations: stations.map((s: Record<string,unknown>) => ({
+              ...s,
+              name: String(s.name ?? s.address ?? s.site_name ?? `${s.brand ?? ''} ${s.postcode ?? ''}`),
+              facilities: getFacilities(String(s.brand ?? '')),
+            })), source: 'fuel_finder' })
           }
         }
-      } catch { /* fall through */ }
+      }
     }
+  } catch (e) { console.log('Fuel Finder error:', e) }
 
-    // CMA open data — fetch all brands in parallel
-    const results = await Promise.allSettled(CMA_SOURCES.map(fetchBrand))
-    const all = results.flatMap(r => r.status === 'fulfilled' ? r.value : [])
+  // 2. CMA open data fallback — all brands in parallel
+  const results = await Promise.allSettled(CMA_SOURCES.map(fetchBrand))
+  const all = results.flatMap(r => r.status === 'fulfilled' ? r.value : [])
+  console.log(`CMA: ${all.length} total stations fetched`)
 
-    const nearby = all
-      .filter(s => s.lat !== 0 && s.lng !== 0)
-      .map(s => ({ ...s, distanceMiles: distanceMiles(lat, lng, s.lat, s.lng) }))
-      .filter(s => s.distanceMiles <= radius)
-      .sort((a, b) => (a.petrol ?? 999) - (b.petrol ?? 999))
-      .slice(0, 100)
+  const nearby = all
+    .filter(s => s.lat !== 0 && s.lng !== 0 && s.lat && s.lng)
+    .map(s => ({ ...s, distanceMiles: distanceMiles(lat, lng, s.lat, s.lng) }))
+    .filter(s => s.distanceMiles <= radius)
+    .sort((a, b) => (a.petrol ?? 999) - (b.petrol ?? 999))
+    .slice(0, 150)
 
-    console.log(`CMA: fetched ${all.length} total, ${nearby.length} within ${radius} miles of ${lat},${lng}`)
-
-    return NextResponse.json({
-      stations: nearby,
-      source: nearby.length > 0 ? 'cma_open_data' : 'unavailable',
-      total: nearby.length,
-    })
-
-  } catch (e) {
-    console.error('Fuel prices API error:', e)
-    return NextResponse.json({ stations: [], source: 'error' }, { status: 500 })
-  }
+  return NextResponse.json({
+    stations: nearby,
+    source: nearby.length > 0 ? 'cma_open_data' : 'unavailable',
+    total: nearby.length,
+    brands: [...new Set(nearby.map(s => s.brand))],
+  })
 }

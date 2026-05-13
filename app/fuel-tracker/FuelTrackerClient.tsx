@@ -22,7 +22,7 @@ interface Station {
   id: string; name: string; brand: string; address: string; postcode: string
   lat: number; lng: number; petrol: number | null; diesel: number | null
   super_unleaded?: number | null; premium_diesel?: number | null
-  lastUpdated: string; distanceMiles?: number
+  lastUpdated: string; distanceMiles?: number; facilities?: string[]
 }
 
 const BRANDS = ['All','Asda','BP','Co-op','Esso','Gulf','Jet','Morrisons',"Sainsbury's",'Shell','Tesco','Texaco']
@@ -293,7 +293,7 @@ export default function FuelTrackerClient() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
                           {isCheapest && <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-semibold">CHEAPEST</span>}
-                          <p className="text-gray-900 font-semibold text-sm truncate">{station.name}</p>
+                          <p className="text-gray-900 font-semibold text-sm truncate">{station.name || station.address || `${station.brand} ${station.postcode}`}</p>
                         </div>
                         <p className="text-gray-500 text-xs truncate">{station.address}</p>
                         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
@@ -355,7 +355,7 @@ export default function FuelTrackerClient() {
 
         {/* Map */}
         <div className="flex-1 relative">
-          <FuelMap stations={sorted.map(s=>({id:s.id,name:s.name,brand:s.brand,address:s.address,postcode:s.postcode,lat:s.lat,lng:s.lng,petrol:s.petrol,diesel:s.diesel,lastUpdated:s.lastUpdated}))} center={mapCenter} zoom={11} />
+          <FuelMap stations={sorted.map(s=>({id:s.id,name:s.name||s.address||`${s.brand} ${s.postcode}`,brand:s.brand,address:s.address,postcode:s.postcode,lat:s.lat,lng:s.lng,petrol:s.petrol,diesel:s.diesel,super_unleaded:s.super_unleaded,lastUpdated:s.lastUpdated,distanceMiles:s.distanceMiles,facilities:s.facilities}))} center={mapCenter} zoom={11} />
 
           <div className="absolute bottom-4 right-4 bg-white border border-gray-200 rounded-xl p-3 text-xs shadow-lg pointer-events-none">
             <p className="text-gray-500 font-medium mb-2">Price guide</p>
