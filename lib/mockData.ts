@@ -9,6 +9,7 @@ export interface FuelStation {
   petrol: number | null
   diesel: number | null
   lastUpdated: string
+  facilities?: string[]
 }
 
 export interface BlogPost {
