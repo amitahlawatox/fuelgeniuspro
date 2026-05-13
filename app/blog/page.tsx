@@ -25,16 +25,16 @@ export default function BlogPage() {
         <div className="w-10 h-10 bg-orange-500/10 rounded-lg flex items-center justify-center">
           <BookOpen className="h-5 w-5 text-orange-400" />
         </div>
-        <h1 className="text-3xl font-bold text-white">Fuel Economy Blog</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Fuel Economy Blog</h1>
       </div>
       <p className="text-gray-400 mb-8">Expert tips on saving money at the pump and running your car more cheaply.</p>
 
       {/* Featured */}
       <Link href={`/blog/${featured.slug}`} className="block bg-gradient-to-br from-green-900/30 to-gray-900 border border-green-500/20 rounded-xl p-6 mb-8 hover:border-green-500/40 transition-colors">
-        <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full mb-3 ${CATEGORY_COLORS[featured.category] || 'bg-gray-800 text-gray-400'}`}>{featured.category}</span>
-        <h2 className="text-2xl font-bold text-white mb-2 group-hover:text-green-400">{featured.title}</h2>
+        <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full mb-3 ${CATEGORY_COLORS[featured.category] || 'bg-gray-100 text-gray-400'}`}>{featured.category}</span>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2 group-hover:text-green-400">{featured.title}</h2>
         <p className="text-gray-400 mb-4">{featured.excerpt}</p>
-        <div className="flex items-center gap-3 text-sm text-gray-500">
+        <div className="flex items-center gap-3 text-sm text-gray-400">
           <span>{new Date(featured.date).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}</span>
           <span>·</span>
           <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {featured.readTime} min read</span>
@@ -43,11 +43,11 @@ export default function BlogPage() {
 
       <div className="grid sm:grid-cols-2 gap-6">
         {rest.map(post => (
-          <Link key={post.slug} href={`/blog/${post.slug}`} className="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-gray-700 transition-colors">
-            <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full mb-3 ${CATEGORY_COLORS[post.category] || 'bg-gray-800 text-gray-400'}`}>{post.category}</span>
-            <h2 className="font-semibold text-white mb-2 leading-snug">{post.title}</h2>
+          <Link key={post.slug} href={`/blog/${post.slug}`} className="bg-white border border-gray-200 rounded-xl p-5 hover:border-gray-300 transition-colors">
+            <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full mb-3 ${CATEGORY_COLORS[post.category] || 'bg-gray-100 text-gray-400'}`}>{post.category}</span>
+            <h2 className="font-semibold text-gray-900 mb-2 leading-snug">{post.title}</h2>
             <p className="text-sm text-gray-400 mb-4 line-clamp-2">{post.excerpt}</p>
-            <div className="flex items-center gap-3 text-xs text-gray-500">
+            <div className="flex items-center gap-3 text-xs text-gray-400">
               <span>{new Date(post.date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</span>
               <span>·</span>
               <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {post.readTime} min</span>

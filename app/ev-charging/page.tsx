@@ -29,13 +29,13 @@ export default function EVChargingPage() {
         <div className="w-10 h-10 bg-yellow-500/10 rounded-lg flex items-center justify-center">
           <Zap className="h-5 w-5 text-yellow-400" />
         </div>
-        <h1 className="text-3xl font-bold text-white">EV Charger Finder</h1>
+        <h1 className="text-3xl font-bold text-gray-900">EV Charger Finder</h1>
       </div>
       <p className="text-gray-400 mb-8">Find public electric vehicle charging stations near you. Data from the National Chargepoint Registry (NCR).</p>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
         {[['9,000+','Public Chargers'],['3,200+','Rapid Chargers'],['1,100+','Ultra-rapid'],['24/7','Most Open']].map(([n,l]) => (
-          <div key={l} className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+          <div key={l} className="bg-white border border-gray-200 rounded-xl p-4 text-center">
             <p className="text-2xl font-bold text-green-400">{n}</p>
             <p className="text-sm text-gray-400 mt-1">{l}</p>
           </div>
@@ -47,19 +47,19 @@ export default function EVChargingPage() {
           const speed = speedLabel(c.kw)
           const available = c.available > 0
           return (
-            <div key={c.id} className="bg-gray-900 border border-gray-800 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div key={c.id} className="bg-white border border-gray-200 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center gap-4">
               <div className="flex-1">
                 <div className="flex items-start gap-3">
                   <div className={`w-8 h-8 rounded-lg ${speed.bg} flex items-center justify-center flex-shrink-0 mt-0.5`}>
                     <Zap className={`h-4 w-4 ${speed.color}`} />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-white">{c.name}</h3>
+                    <h3 className="font-semibold text-gray-900">{c.name}</h3>
                     <p className="text-sm text-gray-400 flex items-center gap-1 mt-0.5"><MapPin className="h-3 w-3" />{c.address}, {c.postcode}</p>
                     <div className="flex flex-wrap gap-2 mt-2">
                       <span className={`text-xs px-2 py-0.5 rounded-full ${speed.bg} ${speed.color} font-medium`}>{speed.label} · {c.kw}kW</span>
                       {c.connectors.map(conn => (
-                        <span key={conn} className="text-xs px-2 py-0.5 rounded-full bg-gray-800 text-gray-300">{conn}</span>
+                        <span key={conn} className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{conn}</span>
                       ))}
                     </div>
                   </div>
@@ -70,7 +70,7 @@ export default function EVChargingPage() {
                   <Battery className="h-4 w-4" />
                   {available ? `${c.available} available` : 'All in use'}
                 </div>
-                <p className="text-xs text-gray-500">{c.total} connectors total</p>
+                <p className="text-xs text-gray-400">{c.total} connectors total</p>
               </div>
             </div>
           )

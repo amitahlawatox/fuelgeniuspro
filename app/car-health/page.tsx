@@ -69,12 +69,12 @@ export default function CarHealthPage() {
         <div className="w-10 h-10 bg-purple-500/10 rounded-lg flex items-center justify-center">
           <Car className="h-5 w-5 text-purple-400" />
         </div>
-        <h1 className="text-3xl font-bold text-white">Car Health Check</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Car Health Check</h1>
       </div>
       <p className="text-gray-400 mb-8">Enter any UK number plate to check MOT status, tax, fuel type and more via the official DVLA database.</p>
 
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-        <label className="block text-sm font-medium text-gray-300 mb-2">Number Plate</label>
+      <div className="bg-white border border-gray-200 rounded-xl p-6">
+        <label className="block text-sm font-medium text-gray-500 mb-2">Number Plate</label>
         <div className="flex gap-3">
           <input
             value={reg}
@@ -84,12 +84,12 @@ export default function CarHealthPage() {
             className="flex-1 bg-yellow-400/10 border border-yellow-400/30 rounded-lg px-4 py-3 text-yellow-300 placeholder-yellow-600 font-mono text-lg font-bold tracking-widest uppercase focus:outline-none focus:border-yellow-400"
           />
           <button onClick={lookup} disabled={loading}
-            className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-semibold px-6 py-3 rounded-lg transition-colors flex items-center gap-2">
+            className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-gray-900 font-semibold px-6 py-3 rounded-lg transition-colors flex items-center gap-2">
             <Search className="h-4 w-4" />
             {loading ? 'Checking…' : 'Check'}
           </button>
         </div>
-        <p className="text-xs text-gray-500 mt-2">Powered by the official DVLA Vehicle Enquiry Service API</p>
+        <p className="text-xs text-gray-400 mt-2">Powered by the official DVLA Vehicle Enquiry Service API</p>
       </div>
 
       {error && (
@@ -99,32 +99,32 @@ export default function CarHealthPage() {
       )}
 
       {vehicle && (
-        <div className="mt-6 bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-          <div className="bg-gray-800 px-5 py-4 flex items-center justify-between">
+        <div className="mt-6 bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <div className="bg-gray-100 px-5 py-4 flex items-center justify-between">
             <div>
               <span className="font-mono text-xl font-bold text-yellow-300 bg-yellow-400/10 border border-yellow-400/30 px-3 py-1 rounded">{vehicle.registrationNumber}</span>
-              <span className="ml-3 text-white font-semibold">{vehicle.make}</span>
+              <span className="ml-3 text-gray-900 font-semibold">{vehicle.make}</span>
             </div>
           </div>
           <div className="p-5">
             <div className="grid grid-cols-2 gap-3 mb-5">
-              <div className="bg-gray-800 rounded-lg p-3">
+              <div className="bg-gray-100 rounded-lg p-3">
                 <p className="text-xs text-gray-400 mb-1">MOT Status</p>
                 <StatusBadge status={vehicle.motStatus} />
-                {vehicle.motExpiryDate && <p className="text-xs text-gray-500 mt-1">Expires: {vehicle.motExpiryDate}</p>}
+                {vehicle.motExpiryDate && <p className="text-xs text-gray-400 mt-1">Expires: {vehicle.motExpiryDate}</p>}
               </div>
-              <div className="bg-gray-800 rounded-lg p-3">
+              <div className="bg-gray-100 rounded-lg p-3">
                 <p className="text-xs text-gray-400 mb-1">Tax Status</p>
                 <StatusBadge status={vehicle.taxStatus} />
-                {vehicle.taxDueDate && <p className="text-xs text-gray-500 mt-1">Due: {vehicle.taxDueDate}</p>}
+                {vehicle.taxDueDate && <p className="text-xs text-gray-400 mt-1">Due: {vehicle.taxDueDate}</p>}
               </div>
             </div>
             <table className="w-full text-sm">
-              <tbody className="divide-y divide-gray-800">
+              <tbody className="divide-y divide-gray-100">
                 {rows.map(([k,v]) => (
                   <tr key={k}>
                     <td className="py-2.5 text-gray-400 w-1/2">{k}</td>
-                    <td className="py-2.5 text-white font-medium capitalize">{v?.toLowerCase()}</td>
+                    <td className="py-2.5 text-gray-900 font-medium capitalize">{v?.toLowerCase()}</td>
                   </tr>
                 ))}
               </tbody>

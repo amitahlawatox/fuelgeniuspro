@@ -16,23 +16,23 @@ export default function HomePage() {
   return (
     <div>
       {/* Hero */}
-      <section className="bg-gradient-to-b from-gray-900 to-gray-950 border-b border-gray-800">
+      <section className="bg-gradient-to-b from-gray-50 to-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center">
           <div className="inline-flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-full px-4 py-1.5 text-sm text-green-400 mb-6">
             <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
             Live prices updated every hour
           </div>
-          <h1 className="text-4xl sm:text-6xl font-extrabold text-white mb-4 leading-tight">
+          <h1 className="text-4xl sm:text-6xl font-extrabold text-gray-900 mb-4 leading-tight">
             Find the <span className="text-green-500">Cheapest Fuel</span><br />Near You — Right Now
           </h1>
           <p className="text-xl text-gray-400 mb-8 max-w-2xl mx-auto">
             Live petrol & diesel prices from thousands of UK stations. Save up to 15p per litre every fill-up.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Link href="/fuel-tracker" className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white font-semibold px-8 py-3.5 rounded-xl transition-colors text-lg">
+            <Link href="/fuel-tracker" className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-500 text-gray-900 font-semibold px-8 py-3.5 rounded-xl transition-colors text-lg">
               <MapPin className="h-5 w-5" /> View Fuel Map
             </Link>
-            <Link href="/journey" className="inline-flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-white font-semibold px-8 py-3.5 rounded-xl transition-colors text-lg border border-gray-700">
+            <Link href="/journey" className="inline-flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-900 font-semibold px-8 py-3.5 rounded-xl transition-colors text-lg border border-gray-300">
               <Calculator className="h-5 w-5" /> Journey Calculator
             </Link>
           </div>
@@ -41,7 +41,7 @@ export default function HomePage() {
 
       {/* Live Avg Prices */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <h2 className="text-2xl font-bold text-white mb-2">UK Average Fuel Prices Today</h2>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">UK Average Fuel Prices Today</h2>
         <p className="text-gray-400 text-sm mb-6">Updated: {new Date(UK_AVG_PRICES.lastUpdated).toLocaleString('en-GB')}</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
           <PriceCard label="Unleaded Petrol (E10)" price={UK_AVG_PRICES.petrol} change={-1.2} />
@@ -51,10 +51,10 @@ export default function HomePage() {
 
       {/* Cheapest nearby */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h2 className="text-2xl font-bold text-white mb-6">Cheapest Stations Right Now</h2>
-        <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
+        <h2 className="text-2xl font-bold text-gray-900 mb-6">Cheapest Stations Right Now</h2>
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-800 text-gray-400 uppercase text-xs tracking-wider">
+            <thead className="bg-gray-100 text-gray-400 uppercase text-xs tracking-wider">
               <tr>
                 <th className="text-left px-4 py-3">Station</th>
                 <th className="text-left px-4 py-3 hidden sm:table-cell">Brand</th>
@@ -62,12 +62,12 @@ export default function HomePage() {
                 <th className="text-right px-4 py-3">Diesel</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-800">
+            <tbody className="divide-y divide-gray-100">
               {cheapest.map(s => (
-                <tr key={s.id} className="hover:bg-gray-800/50 transition-colors">
+                <tr key={s.id} className="hover:bg-gray-100/50 transition-colors">
                   <td className="px-4 py-3">
-                    <p className="font-medium text-white">{s.name}</p>
-                    <p className="text-gray-500 text-xs">{s.postcode}</p>
+                    <p className="font-medium text-gray-900">{s.name}</p>
+                    <p className="text-gray-400 text-xs">{s.postcode}</p>
                   </td>
                   <td className="px-4 py-3 hidden sm:table-cell text-gray-400">{s.brand}</td>
                   <td className="px-4 py-3 text-right font-bold text-green-400">{s.petrol ? `${s.petrol.toFixed(1)}p` : '—'}</td>
@@ -84,7 +84,7 @@ export default function HomePage() {
 
       {/* Features grid */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <h2 className="text-3xl font-bold text-white text-center mb-12">Everything you need to save on fuel</h2>
+        <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">Everything you need to save on fuel</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {[
             { href: '/fuel-tracker', icon: MapPin, color: 'green', title: 'Live Fuel Map', desc: 'See every petrol station near you with live prices on an interactive map.' },
@@ -92,11 +92,11 @@ export default function HomePage() {
             { href: '/car-health', icon: Car, color: 'purple', title: 'DVLA Car Checker', desc: 'Check any UK vehicle\'s MOT, tax status and official MPG in seconds.' },
             { href: '/ev-charging', icon: Zap, color: 'yellow', title: 'EV Charger Finder', desc: 'Find every public EV charge point near you with real-time availability.' },
           ].map(({ href, icon: Icon, color, title, desc }) => (
-            <Link key={href} href={href} className="group bg-gray-900 border border-gray-800 rounded-xl p-6 hover:border-gray-700 transition-all hover:-translate-y-0.5">
+            <Link key={href} href={href} className="group bg-white border border-gray-200 rounded-xl p-6 hover:border-gray-300 transition-all hover:-translate-y-0.5">
               <div className={`w-10 h-10 rounded-lg bg-${color}-500/10 flex items-center justify-center mb-4`}>
                 <Icon className={`h-5 w-5 text-${color}-400`} />
               </div>
-              <h3 className="font-semibold text-white mb-2">{title}</h3>
+              <h3 className="font-semibold text-gray-900 mb-2">{title}</h3>
               <p className="text-sm text-gray-400 leading-relaxed">{desc}</p>
             </Link>
           ))}
@@ -104,11 +104,11 @@ export default function HomePage() {
       </section>
 
       {/* SEO City Links */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 border-t border-gray-800">
-        <h2 className="text-2xl font-bold text-white mb-6">Fuel Prices by City</h2>
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 border-t border-gray-200">
+        <h2 className="text-2xl font-bold text-gray-900 mb-6">Fuel Prices by City</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
           {ukCities.map(city => (
-            <Link key={city.slug} href={`/fuel/${city.slug}`} className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 hover:text-green-400 hover:border-green-500/30 transition-colors text-center">
+            <Link key={city.slug} href={`/fuel/${city.slug}`} className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-500 hover:text-green-400 hover:border-green-500/30 transition-colors text-center">
               {city.name}
             </Link>
           ))}
@@ -128,7 +128,7 @@ export default function HomePage() {
                 <Icon className="h-5 w-5 text-green-400" />
               </div>
               <div>
-                <h3 className="font-semibold text-white mb-1">{title}</h3>
+                <h3 className="font-semibold text-gray-900 mb-1">{title}</h3>
                 <p className="text-sm text-gray-400">{desc}</p>
               </div>
             </div>

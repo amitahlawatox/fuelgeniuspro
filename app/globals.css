@@ -8,9 +8,16 @@
 }
 
 body {
-  @apply bg-gray-950 text-gray-100;
+  @apply bg-gray-50 text-gray-900;
 }
 
 .leaflet-container {
-  background: #1f2937 !important;
+  background: #e5e7eb !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background: white !important;
+  color: #111 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important;
 }

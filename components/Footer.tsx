@@ -10,7 +10,7 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div>
             <div className="flex items-center gap-2 font-bold text-lg text-white mb-3">
-              <Fuel className="h-5 w-5 text-green-500" />
+              <div className="w-7 h-7 bg-green-600 rounded-lg flex items-center justify-center"><Fuel className="h-4 w-4 text-white" /></div>
               FuelGeniusPro
             </div>
             <p className="text-sm text-gray-400 leading-relaxed">Live UK petrol & diesel prices. Save money every fill-up.</p>
@@ -18,7 +18,7 @@ export default function Footer() {
           <div>
             <h3 className="font-semibold text-white mb-3 text-sm uppercase tracking-wider">Tools</h3>
             <ul className="space-y-2 text-sm text-gray-400">
-              {[['Fuel Price Map', '/fuel-tracker'],['Journey Calculator', '/journey'],['EV Charger Finder', '/ev-charging'],['Car Health Check', '/car-health']].map(([l,h]) => (
+              {[['Fuel Price Map','/fuel-tracker'],['Journey Calculator','/journey'],['EV Charger Finder','/ev-charging'],['Car Health Check','/car-health']].map(([l,h])=>(
                 <li key={h}><Link href={h} className="hover:text-green-400 transition-colors">{l}</Link></li>
               ))}
             </ul>
@@ -26,7 +26,7 @@ export default function Footer() {
           <div>
             <h3 className="font-semibold text-white mb-3 text-sm uppercase tracking-wider">Top Cities</h3>
             <ul className="space-y-2 text-sm text-gray-400">
-              {cities.slice(0,5).map(c => (
+              {cities.slice(0,5).map(c=>(
                 <li key={c}><Link href={`/fuel/${c}`} className="hover:text-green-400 transition-colors capitalize">{c}</Link></li>
               ))}
             </ul>
@@ -34,7 +34,7 @@ export default function Footer() {
           <div>
             <h3 className="font-semibold text-white mb-3 text-sm uppercase tracking-wider">More Cities</h3>
             <ul className="space-y-2 text-sm text-gray-400">
-              {cities.slice(5).map(c => (
+              {cities.slice(5).map(c=>(
                 <li key={c}><Link href={`/fuel/${c}`} className="hover:text-green-400 transition-colors capitalize">{c}</Link></li>
               ))}
             </ul>

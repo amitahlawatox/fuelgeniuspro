@@ -33,29 +33,29 @@ export default function BlogPostPage({ params }: { params: { slug: string } }) {
       <div className="mb-2">
         <span className="text-xs font-semibold bg-green-500/10 text-green-400 px-2.5 py-1 rounded-full">{post.category}</span>
       </div>
-      <h1 className="text-3xl sm:text-4xl font-extrabold text-white mt-3 mb-4 leading-tight">{post.title}</h1>
-      <div className="flex items-center gap-3 text-sm text-gray-400 mb-8 pb-8 border-b border-gray-800">
+      <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mt-3 mb-4 leading-tight">{post.title}</h1>
+      <div className="flex items-center gap-3 text-sm text-gray-400 mb-8 pb-8 border-b border-gray-200">
         <span>{new Date(post.date).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}</span>
         <span>·</span>
         <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {post.readTime} min read</span>
         <span>·</span>
         <span className="flex items-center gap-1"><BookOpen className="h-3.5 w-3.5" /> FuelGeniusPro</span>
       </div>
-      <div className="prose prose-invert prose-green max-w-none text-gray-300 leading-relaxed space-y-4">
+      <div className="prose prose-invert prose-green max-w-none text-gray-500 leading-relaxed space-y-4">
         {content.split('\n\n').map((para, i) => (
-          <p key={i} className="text-gray-300 leading-relaxed" dangerouslySetInnerHTML={{__html: para.replace(/\*\*(.*?)\*\*/g,'<strong class="text-white">$1</strong>').replace(/\*(.*?)\*/g,'<em>$1</em>')}} />
+          <p key={i} className="text-gray-500 leading-relaxed" dangerouslySetInnerHTML={{__html: para.replace(/\*\*(.*?)\*\*/g,'<strong class="text-white">$1</strong>').replace(/\*(.*?)\*/g,'<em>$1</em>')}} />
         ))}
       </div>
       {related.length > 0 && (
-        <div className="mt-12 pt-8 border-t border-gray-800">
-          <h2 className="font-bold text-white text-lg mb-4">Related Articles</h2>
+        <div className="mt-12 pt-8 border-t border-gray-200">
+          <h2 className="font-bold text-gray-900 text-lg mb-4">Related Articles</h2>
           <div className="space-y-3">
             {related.map(r => (
-              <Link key={r.slug} href={`/blog/${r.slug}`} className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-900 transition-colors">
-                <div className="w-8 h-8 bg-gray-800 rounded flex items-center justify-center flex-shrink-0"><BookOpen className="h-4 w-4 text-gray-400" /></div>
+              <Link key={r.slug} href={`/blog/${r.slug}`} className="flex items-start gap-3 p-3 rounded-lg hover:bg-white transition-colors">
+                <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center flex-shrink-0"><BookOpen className="h-4 w-4 text-gray-400" /></div>
                 <div>
-                  <p className="font-medium text-white text-sm">{r.title}</p>
-                  <p className="text-xs text-gray-500">{r.readTime} min read · {r.category}</p>
+                  <p className="font-medium text-gray-900 text-sm">{r.title}</p>
+                  <p className="text-xs text-gray-400">{r.readTime} min read · {r.category}</p>
                 </div>
               </Link>
             ))}
